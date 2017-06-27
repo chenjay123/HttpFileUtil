@@ -25,6 +25,8 @@ import java.util.*;
  * 下载文件支持： get、post 下载文件（或者流）
  */
 public class HttpFileUtil {
+    private HttpFileUtil() {
+    }
 
     private static final Logger logger = LoggerFactory.getLogger(HttpFileUtil.class);
 
@@ -37,48 +39,40 @@ public class HttpFileUtil {
      * @param fileParts
      * @return
      */
-    public static String uploadFile(String destUrl, HashMap<String, String> textParts, HashMap<String, File> fileParts) {
+    public static String uploadFile(String destUrl, Map<String, String> textParts, Map<String, File> fileParts) {
         String reStr = null;
         if (destUrl == null || fileParts == null) {
             return null;
         }
-        HashMap<String, StreamFileType> streamParts = new HashMap<String, StreamFileType>();
+        HashMap<String, StreamFileType> streamParts = new HashMap<>();
         Iterator<Map.Entry<String, File>> fileIter = fileParts.entrySet().iterator();
+        ArrayList<FileInputStream> fisList = new ArrayList<>();
         try {
             while (fileIter.hasNext()) {
                 Map.Entry<String, File> entry = fileIter.next();
-                InputStream inPutStream = null;
                 String fileName = entry.getKey();
                 File file = entry.getValue();
-                inPutStream = new FileInputStream(file);
+                FileInputStream inPutStream = new FileInputStream(file);
+                fisList.add(inPutStream);
                 StreamFileType streamFile = new StreamFileType(inPutStream, file.getName());
                 streamParts.put(fileName, streamFile);
             }
             reStr = uploadStream(destUrl, textParts, streamParts);
-        } catch (Exception e) {
-            logger.error("上传文件异常：{}", e.getMessage());
+        } catch (FileNotFoundException e) {
+            logger.error("上传文件异常：{}| {}", e, e.getMessage());
         } finally {
             // 关闭文件流。
-            Iterator<Map.Entry<String, StreamFileType>> streamIter = streamParts.entrySet().iterator();
-            while (streamIter.hasNext()) {
-                Map.Entry<String, StreamFileType> entry = streamIter.next();
-                StreamFileType streamFile = entry.getValue();
-                if (streamFile == null) {
-                    continue;
-                }
-                InputStream inputStream = streamFile.getInStream();
-                if (inputStream != null) {
+            for (FileInputStream fis : fisList) {
+                if (fis != null) {
                     try {
-                        inputStream.close();
+                        fis.close();
                     } catch (IOException e) {
-                        logger.error("IO异常：{}", e.getMessage());
+                        logger.error("上传文件异常：{}|{}", e, e.getMessage());
                     }
                 }
             }
-
         }
         return reStr;
-
     }
 
     /**
@@ -86,13 +80,14 @@ public class HttpFileUtil {
      *
      * @param destUrl
      * @param textParts
-     * @param StreamParts
+     * @param streamParts
      * @return
      */
-    public static String uploadStream(String destUrl, HashMap<String, String> textParts, HashMap<String, StreamFileType> StreamParts) {
+
+    public static String uploadStream(String destUrl, Map<String, String> textParts, Map<String, StreamFileType> streamParts) {
         int timeOut = 3000;
         String reStr = null;
-        if (destUrl == null || StreamParts == null) {
+        if (destUrl == null || streamParts == null) {
             return null;
         }
         //1、创建HttpClient
@@ -112,7 +107,7 @@ public class HttpFileUtil {
             }
 
             //3、设置 multipart/form-data 文件流表单
-            Iterator<Map.Entry<String, StreamFileType>> fileIter = StreamParts.entrySet().iterator();
+            Iterator<Map.Entry<String, StreamFileType>> fileIter = streamParts.entrySet().iterator();
             while (fileIter.hasNext()) {
                 Map.Entry<String, StreamFileType> entry = fileIter.next();
                 String name = entry.getKey();
@@ -136,20 +131,20 @@ public class HttpFileUtil {
                 // 8、get result data
                 HttpEntity entity = response.getEntity();
                 reStr = EntityUtils.toString(entity);
-                logger.info(destUrl + ": resStatu is " + resStatu);
+                logger.info("{} : resStatu is {}", destUrl, resStatu);
             } else {
-                logger.error(destUrl + ": resStatu is " + resStatu);
+                logger.error("{} : resStatu is {}", destUrl, resStatu);
                 throw new Exception("resStatu is" + resStatu);
             }
         } catch (Exception e) {
-            logger.error("uploadFile异常 :{}", e.getMessage());
+            logger.error("uploadFile异常 :{}", e);
 
         } finally {
             try {
                 // 9、关闭HttpClient
                 client.close();
             } catch (Exception e) {
-                logger.error("uploadFile|关闭HttpClient :{}", e.getMessage());
+                logger.error("uploadFile|关闭HttpClient :{}", e);
             }
         }
         return reStr;
@@ -164,7 +159,7 @@ public class HttpFileUtil {
      * @param outPut
      * @return
      */
-    public static String getDownloadStream(String url, HashMap<String, String> params, OutputStream outPut) {
+    public static String getDownloadStream(String url, Map<String, String> params, OutputStream outPut) {
         String fileType = null;
         InputStream in = null;
         if (url == null || outPut == null) {
@@ -200,7 +195,7 @@ public class HttpFileUtil {
                 fileType = contentTypes;
             }
         } catch (Exception e) {
-            logger.error("downloadFile异常 :{}", e.getMessage());
+            logger.error("getDownloadStream异常 :{}", e);
         } finally {
             // 关闭文件流。
             try {
@@ -208,7 +203,7 @@ public class HttpFileUtil {
                     in.close();
                 }
             } catch (IOException e) {
-                logger.error("downloadFile fout关闭异常 :{}", e.getMessage());
+                logger.error("getDownloadStream fout关闭异常 :{}", e);
             }
             // 关闭客户端
             try {
@@ -217,7 +212,7 @@ public class HttpFileUtil {
                     client.close();
                 }
             } catch (IOException e) {
-                logger.error("downloadFile client 关闭异常 :{}", e.getMessage());
+                logger.error("downloadFile client 关闭异常 :{}", e);
             }
         }
         return fileType;
@@ -232,7 +227,7 @@ public class HttpFileUtil {
      * @param outPut
      * @return
      */
-    public static String postDownloadStream(String url, HashMap<String, String> params, OutputStream outPut) {
+    public static String postDownloadStream(String url, Map<String, String> params, OutputStream outPut) {
         String fileType = null;
         InputStream in = null;
         if (url == null || outPut == null) {
@@ -272,10 +267,11 @@ public class HttpFileUtil {
                     outPut.write(tmp, 0, len);
                 }
                 outPut.flush();
+                fileType = contentTypes;
             }
-            fileType = contentTypes;
+
         } catch (Exception e) {
-            logger.error("downloadFile异常 :{}", e.getMessage());
+            logger.error("postDownloadStream 异常 :{}", e);
         } finally {
             // 关闭文件流。
             try {
@@ -283,7 +279,7 @@ public class HttpFileUtil {
                     in.close();
                 }
             } catch (IOException e) {
-                logger.error("downloadFile fout关闭异常 :{}", e.getMessage());
+                logger.error("postDownloadStream |fout关闭异常 :{}", e);
             }
             // 关闭客户端
             try {
@@ -292,7 +288,7 @@ public class HttpFileUtil {
                     client.close();
                 }
             } catch (IOException e) {
-                logger.error("downloadFile client 关闭异常 :{}", e.getMessage());
+                logger.error("downloadFile client 关闭异常 :{}", e);
             }
         }
         // 返回文件类型
@@ -307,38 +303,31 @@ public class HttpFileUtil {
      * @param destFileName
      * @return
      */
-    public static int postDownloadFile(String url, HashMap<String, String> params, String destFileName) {
+    public static int postDownloadFile(String url, Map<String, String> params, String destFileName) {
         int rte = -1;
         String fileType = null;
-        FileOutputStream fout = null;
         if (url == null || destFileName == null) {
             return -2;
         }
-        try {
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            fileType = postDownloadStream(url, params, bos);
-            if (fileType != null) {
-                String[] arrs = fileType.split("/");
-                StringBuilder buf = new StringBuilder(destFileName);
-                if (arrs[1] != null) {
-                    buf.append(".").append(arrs[1]);
-                }
-                File file = new File(buf.toString());
-                fout = new FileOutputStream(file);
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        fileType = postDownloadStream(url, params, bos);
+        if (fileType != null) {
+            String[] arrs = fileType.split("/");
+            StringBuilder buf = new StringBuilder(destFileName);
+            if (arrs[1] != null) {
+                buf.append(".").append(arrs[1]);
+            }
+            File file = new File(buf.toString());
+            try (FileOutputStream fout = new FileOutputStream(file)) {
                 fout.write(bos.toByteArray());
                 rte = 0;
+            } catch (Exception e) {
+                logger.error("downloadFile异常 :{}", e);
             }
-            bos.close();
-        } catch (Exception e) {
-            logger.error("downloadFile异常 :{}", e.getMessage());
-        } finally {
-            // 关闭文件流。
             try {
-                if (fout != null) {
-                    fout.close();
-                }
+                bos.close();
             } catch (IOException e) {
-                logger.error("downloadFile fout关闭异常 :{}", e.getMessage());
+                logger.error("postDownloadFile 异常 :{}", e);
             }
         }
         return rte;
@@ -353,39 +342,33 @@ public class HttpFileUtil {
      * @param destFileName
      * @return
      */
-    public static int getDownloadFile(String url, HashMap<String, String> params, String destFileName) {
+    public static int getDownloadFile(String url, Map<String, String> params, String destFileName) {
         String fileType = null;
         int ret = -1;
         if (url == null || destFileName == null) {
             return -2;
         }
-        FileOutputStream fout = null;
-        try {
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            fileType = getDownloadStream(url, params, bos);
-            if (fileType != null) {
-                String[] arrs = fileType.split("/");
-                StringBuilder buf = new StringBuilder(destFileName);
-                if (arrs[1] != null) {
-                    buf.append(".").append(arrs[1]);
-                }
-                File file = new File(buf.toString());
-                fout = new FileOutputStream(file);
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        fileType = getDownloadStream(url, params, bos);
+        if (fileType != null) {
+            String[] arrs = fileType.split("/");
+            StringBuilder buf = new StringBuilder(destFileName);
+            if (arrs[1] != null) {
+                buf.append(".").append(arrs[1]);
+            }
+            File file = new File(buf.toString());
+            try (FileOutputStream fout = new FileOutputStream(file);) {
                 fout.write(bos.toByteArray());
                 ret = 0;
+            } catch (IOException e) {
+                logger.error("getDownloadFile 下载异常{}", e);
             }
+        }
+        try {
             bos.close();
         } catch (Exception e) {
-            logger.error("downloadFile异常 :{}", e.getMessage());
-        } finally {
-            // 关闭文件流。
-            try {
-                if (fout != null) {
-                    fout.close();
-                }
-            } catch (IOException e) {
-                logger.error("downloadFile fout关闭异常 :{}", e.getMessage());
-            }
+            logger.error("downloadFile异常 :{}", e);
         }
         return ret;
     }
